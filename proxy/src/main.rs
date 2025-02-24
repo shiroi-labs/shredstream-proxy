@@ -26,7 +26,7 @@ use solana_client::client_error::{reqwest, ClientError};
 use solana_ledger::shred::{shred_code::ShredCode, ReedSolomonCache, Shred};
 use solana_metrics::set_host_id;
 use solana_perf::deduper::Deduper;
-use solana_sdk::signature::read_keypair_file;
+use solana_sdk::{clock::Slot, signature::read_keypair_file};
 use solana_streamer::streamer::StreamerReceiveStats;
 use thiserror::Error;
 use tokio::runtime::Runtime;
@@ -421,46 +421,55 @@ fn main2() -> Result<(), Error> {
     dbg!(packets.packets.len());
 
     let mut fail_count = 0;
-    let reconstructed_shreds = packets
+    let mut reconstructed_shreds = HashMap::<Slot, Vec<Option<Shred>>>::new();
+    packets
         .packets
         .into_iter()
         .filter_map(|p| {
             let reconstructed_shred = Shred::new_from_serialized_shred(p);
-            match reconstructed_shred {
-                Ok(reconstructed_shred) => Some((reconstructed_shred.slot(), reconstructed_shred)),
-                _ => {
-                    // println!("failed with len {}", len);
-                    fail_count += 1; // these are trace shreds
-                    None
-                }
-            }
+            reconstructed_shred
+                .inspect_err(|e| {
+                    warn!("Failed to reconstruct shred: {:?}", e);
+                    fail_count += 1;
+                })
+                .ok()
         })
-        .into_group_map();
+        .for_each(|shred| {
+            if shred.is_code() {
+                return;
+            }
+            let slot_shreds = reconstructed_shreds
+                .entry(shred.slot())
+                .or_insert_with(|| vec![]);
+            // println!("{} {}", shred.fec_set_index(), shred.index());
+            slot_shreds.push(Some(shred.clone()));
+        });
 
     // print diagnostic info
     dbg!(fail_count);
     for (slot, shreds) in reconstructed_shreds.iter().sorted_by_key(|x| x.0) {
-        let code_shred_count = shreds.iter().filter(|s| s.is_code()).count();
-        let data_shred_count = shreds.iter().filter(|s| s.is_data()).count();
-        let data_complete_unique_count = shreds
+        let to_iter = shreds.iter().filter_map(|x| x.clone()).collect_vec();
+        let code_shred_count = to_iter.iter().filter(|s| s.is_code()).count();
+        let data_shred_count = to_iter.iter().filter(|s| s.is_data()).count();
+        let data_complete_unique_count = to_iter
             .iter()
             .filter(|s| Shred::data_complete(s))
             .map(|s| s.payload())
             .unique()
             .count();
-        let code_shred_unique_count = shreds
+        let code_shred_unique_count = to_iter
             .iter()
             .filter(|s| s.is_code())
             .map(|s| s.payload())
             .unique()
             .count();
-        let data_shred_unique_count = shreds
+        let data_shred_unique_count = to_iter
             .iter()
             .filter(|s| s.is_data())
             .map(|s| s.payload())
             .unique()
             .count();
-        let last_index = shreds
+        let last_index = to_iter
             .iter()
             .find(|s| s.last_in_slot())
             .map(|s| s.index())
@@ -471,45 +480,73 @@ fn main2() -> Result<(), Error> {
         );
     }
 
-    for (slot, mut shreds) in reconstructed_shreds.iter().sorted_by_key(|x| x.0) {
-        let mut shreds = shreds.clone();
-        shreds.sort_by_key(|s| (s.is_data(), s.index()));
-        let Some(last_shred) = shreds.last() else {
-            continue;
-        };
-        // println!("last shred index: {}", last_shred.index());
-        if !last_shred.last_in_slot() {
-            println!("bad slot! at {slot}");
-            continue;
-        }
-        let mut new_shreds = vec![last_shred.clone(); 100000];
+    for (slot, mut shreds) in reconstructed_shreds.iter().sorted_by_key(|x| x.0).skip(2) {
+        let mut new_shreds = shreds.clone();
+        new_shreds.sort_by_key(|s| s.as_ref().unwrap().index());
+        new_shreds.dedup();
+        let mut slot_entries = Vec::new();
+        let mut last_idx = 0;
+        let mut curr_idx = 0;
+        new_shreds
+            .iter()
+            .filter(|s| s.as_ref().unwrap().data_complete())
+            .cloned()
+            .filter_map(|s| s)
+            .map(|s| {
+                println!(
+                    "{slot} {} {} {}",
+                    s.fec_set_index(),
+                    s.index(),
+                    s.data_complete()
+                )
+            })
+            .unique()
+            .count();
+        while curr_idx < new_shreds.len() {
+            let Some(shred) = &new_shreds[curr_idx] else {
+                println!("shred missing for index {curr_idx} of slot {slot}");
+                break;
+            };
 
-        shreds.iter().for_each(|s| {
-            new_shreds[s.index() as usize] = s.clone();
-        });
-
-        let deshred_payload = match solana_ledger::shred::Shredder::deshred(
-            &new_shreds[..=last_shred.index() as usize],
-        ) {
-            Ok(v) => v,
-            Err(e) => {
-                println!("slot {slot} failed with err: {e}");
+            if !shred.data_complete() {
+                curr_idx += 1;
                 continue;
             }
-        };
-        let entries =
-            match bincode::deserialize::<Vec<solana_entry::entry::Entry>>(&deshred_payload) {
-                Ok(e) => e,
+
+            let deshred_payload = match solana_ledger::shred::Shredder::deshred(
+                &new_shreds[last_idx..=curr_idx]
+                    .iter()
+                    .map(|x| x.clone().unwrap())
+                    .collect_vec(),
+            ) {
+                Ok(v) => v,
                 Err(e) => {
-                    println!("slot {slot} failed with err: {e}");
+                    println!("slot {slot} failed to deshred with err: {e}");
                     continue;
                 }
             };
+            let entries =
+                match bincode::deserialize::<Vec<solana_entry::entry::Entry>>(&deshred_payload) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        println!("slot {slot} failed to deserialize bincode with err: {e}");
+                        continue;
+                    }
+                };
+
+            slot_entries.extend(entries);
+            curr_idx += 1;
+            last_idx = curr_idx;
+        }
+
         println!(
             "slot {}, entries: {}, transactions: {}",
             slot,
-            entries.len(),
-            entries.iter().map(|e| e.transactions.len()).sum::<usize>()
+            slot_entries.len(),
+            slot_entries
+                .iter()
+                .map(|e| e.transactions.len())
+                .sum::<usize>()
         );
     }
 

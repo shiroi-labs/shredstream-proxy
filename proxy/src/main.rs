@@ -1,7 +1,8 @@
 use std::{
+    collections::{hash_map, HashMap, HashSet},
     io,
-    io::{Error, ErrorKind},
-    net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs},
+    io::{Error, ErrorKind, Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs, UdpSocket},
     panic,
     path::{Path, PathBuf},
     str::FromStr,
@@ -15,11 +16,14 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
+use borsh::BorshDeserialize;
 use clap::{arg, Parser};
 use crossbeam_channel::{Receiver, RecvError, Sender};
+use itertools::Itertools;
 use log::*;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use solana_client::client_error::{reqwest, ClientError};
+use solana_ledger::shred::{shred_code::ShredCode, ReedSolomonCache, Shred};
 use solana_metrics::set_host_id;
 use solana_perf::deduper::Deduper;
 use solana_sdk::signature::read_keypair_file;
@@ -190,6 +194,8 @@ fn shutdown_notifier(exit: Arc<AtomicBool>) -> io::Result<(Sender<()>, Receiver<
 
 fn main() -> Result<(), ShredstreamProxyError> {
     env_logger::builder().init();
+    main2().unwrap();
+    return Ok(());
     let all_args: Args = Args::parse();
 
     let shredstream_args = all_args.shredstream_args.clone();
@@ -355,4 +361,157 @@ fn start_heartbeat(
         shutdown_receiver.clone(),
         exit.clone(),
     )
+}
+
+#[derive(borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Debug)]
+struct Packets {
+    pub packets: Vec<Vec<u8>>,
+}
+fn listen_and_write_shreds() -> std::io::Result<()> {
+    let socket = UdpSocket::bind("127.0.0.1:5000")?;
+    println!("Listening on {}", socket.local_addr()?);
+
+    let mut map = HashMap::<usize, usize>::new();
+    let mut buf = [0u8; 1500];
+    let mut vec = Packets {
+        packets: Vec::new(),
+    };
+
+    let mut i = 0;
+    loop {
+        i += 1;
+        match socket.recv_from(&mut buf) {
+            Ok((amt, _src)) => {
+                vec.packets.push(buf[..amt].to_vec());
+                match map.entry(amt) {
+                    hash_map::Entry::Occupied(mut e) => {
+                        *e.get_mut() += 1;
+                    }
+                    hash_map::Entry::Vacant(e) => {
+                        e.insert(1);
+                    }
+                }
+                *map.get_mut(&amt).unwrap_or(&mut 0) += 1;
+            }
+            Err(e) => {
+                eprintln!("Error receiving data: {}", e);
+            }
+        }
+        if i % 50000 == 0 {
+            dbg!(&map);
+            // size 1203 are data shreds: https://github.com/jito-foundation/jito-solana/blob/1742826fca975bd6d17daa5693abda861bbd2adf/ledger/src/shred/merkle.rs#L42
+            // size 1228 are coding shreds: https://github.com/jito-foundation/jito-solana/blob/1742826fca975bd6d17daa5693abda861bbd2adf/ledger/src/shred/shred_code.rs#L16
+            let mut file = std::fs::File::create("udp_data.bin")?;
+            file.write_all(&borsh::to_vec(&vec)?)?;
+            return Ok(());
+        }
+    }
+}
+
+fn main2() -> Result<(), Error> {
+    // listen_and_write_shreds();
+    // return Ok(());
+
+    let packets = {
+        let mut file = std::fs::File::open("udp_data.bin")?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+        Packets::try_from_slice(&buffer)?
+    };
+    dbg!(packets.packets.len());
+
+    let mut fail_count = 0;
+    let reconstructed_shreds = packets
+        .packets
+        .into_iter()
+        .filter_map(|p| {
+            let reconstructed_shred = Shred::new_from_serialized_shred(p);
+            match reconstructed_shred {
+                Ok(reconstructed_shred) => Some((reconstructed_shred.slot(), reconstructed_shred)),
+                _ => {
+                    // println!("failed with len {}", len);
+                    fail_count += 1; // these are trace shreds
+                    None
+                }
+            }
+        })
+        .into_group_map();
+
+    // print diagnostic info
+    dbg!(fail_count);
+    for (slot, shreds) in reconstructed_shreds.iter().sorted_by_key(|x| x.0) {
+        let code_shred_count = shreds.iter().filter(|s| s.is_code()).count();
+        let data_shred_count = shreds.iter().filter(|s| s.is_data()).count();
+        let data_complete_unique_count = shreds
+            .iter()
+            .filter(|s| Shred::data_complete(s))
+            .map(|s| s.payload())
+            .unique()
+            .count();
+        let code_shred_unique_count = shreds
+            .iter()
+            .filter(|s| s.is_code())
+            .map(|s| s.payload())
+            .unique()
+            .count();
+        let data_shred_unique_count = shreds
+            .iter()
+            .filter(|s| s.is_data())
+            .map(|s| s.payload())
+            .unique()
+            .count();
+        let last_index = shreds
+            .iter()
+            .find(|s| s.last_in_slot())
+            .map(|s| s.index())
+            .unwrap_or_default();
+        println!(
+            "slot: {}, last_index: {}, data_shreds: {}, code_shreds: {}, data_shreds_unique: {}, code_shreds_unique: {}, data_complete_unique_count: {data_complete_unique_count}, count: {}",
+            slot, last_index, data_shred_count, code_shred_count,data_shred_unique_count,code_shred_unique_count, shreds.len()
+        );
+    }
+
+    for (slot, mut shreds) in reconstructed_shreds.iter().sorted_by_key(|x| x.0) {
+        let mut shreds = shreds.clone();
+        shreds.sort_by_key(|s| (s.is_data(), s.index()));
+        let Some(last_shred) = shreds.last() else {
+            continue;
+        };
+        // println!("last shred index: {}", last_shred.index());
+        if !last_shred.last_in_slot() {
+            println!("bad slot! at {slot}");
+            continue;
+        }
+        let mut new_shreds = vec![last_shred.clone(); 100000];
+
+        shreds.iter().for_each(|s| {
+            new_shreds[s.index() as usize] = s.clone();
+        });
+
+        let deshred_payload = match solana_ledger::shred::Shredder::deshred(
+            &new_shreds[..=last_shred.index() as usize],
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("slot {slot} failed with err: {e}");
+                continue;
+            }
+        };
+        let entries =
+            match bincode::deserialize::<Vec<solana_entry::entry::Entry>>(&deshred_payload) {
+                Ok(e) => e,
+                Err(e) => {
+                    println!("slot {slot} failed with err: {e}");
+                    continue;
+                }
+            };
+        println!(
+            "slot {}, entries: {}, transactions: {}",
+            slot,
+            entries.len(),
+            entries.iter().map(|e| e.transactions.len()).sum::<usize>()
+        );
+    }
+
+    Ok(())
 }

@@ -160,7 +160,7 @@ fn recv_from_channel_and_send_multiple_dest(
     let num_deduped = solana_perf::deduper::dedup_packets_and_count_discards(
         &deduper.read().unwrap(),
         &mut packet_batch_vec,
-        |_received_packet, _is_already_marked_as_discard, _is_dup| {},
+        // |_received_packet, _is_already_marked_as_discard, _is_dup| {},
     );
 
     packet_batch_vec.iter().for_each(|batch| {

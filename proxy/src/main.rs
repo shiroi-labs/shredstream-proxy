@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map, HashMap, HashSet},
+    collections::{hash_map, HashMap},
     io,
     io::{Error, ErrorKind, Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs, UdpSocket},
@@ -23,7 +23,7 @@ use itertools::Itertools;
 use log::*;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use solana_client::client_error::{reqwest, ClientError};
-use solana_ledger::shred::{ReedSolomonCache, Shred, Shredder};
+use solana_ledger::shred::{ReedSolomonCache, Shred};
 use solana_metrics::set_host_id;
 use solana_perf::deduper::Deduper;
 use solana_sdk::{clock::Slot, signature::read_keypair_file};
@@ -368,6 +368,8 @@ fn start_heartbeat(
 struct Packets {
     pub packets: Vec<Vec<u8>>,
 }
+
+#[allow(unused)]
 fn listen_and_write_shreds() -> std::io::Result<()> {
     let socket = UdpSocket::bind("127.0.0.1:5000")?;
     println!("Listening on {}", socket.local_addr()?);
@@ -410,8 +412,6 @@ fn listen_and_write_shreds() -> std::io::Result<()> {
 }
 
 fn main2() -> Result<(), Error> {
-    // listen_and_write_shreds();
-    // return Ok(());
     let packets = {
         let mut file = std::fs::File::open("udp_data-orig.bin")?;
         let mut buffer = Vec::new();
@@ -438,30 +438,24 @@ fn main2() -> Result<(), Error> {
         .for_each(|shred| {
             let slot_shreds = reconstructed_shreds
                 .entry(shred.slot())
-                .or_insert_with(|| HashMap::new());
+                .or_default();
             slot_shreds
                 .entry(shred.fec_set_index())
-                .or_insert_with(|| vec![])
+                .or_default()
                 .push(shred.clone());
         });
 
-    for (_slot, mut shreds) in reconstructed_shreds
+    for (_slot, shreds) in reconstructed_shreds
         .iter_mut()
         .sorted_by_key(|x| x.0)
         .skip(2)
     {
-        for (_fec_set_index, mut new_shreds) in shreds.iter_mut() {
-            // new_shreds.sort_by_key(|s| (s.index(), s.is_code()));
+        for (_fec_set_index, new_shreds) in shreds.iter_mut() {
             new_shreds.sort_by_key(|s| (s.is_code(), s.index()));
             new_shreds.dedup();
             new_shreds.remove(0);
             new_shreds.sort_by_key(|s| (50000 - s.index()));
-            // new_shreds[0] = new_shreds[1].clone();
 
-            // let mut slot_entries = Vec::new();
-            let mut curr_idx = 0;
-            let mut last_written_fec_index = u32::MAX;
-            let mut curr_fec_index = 0;
             let rs_cache = ReedSolomonCache::default();
 
             let Ok(recovered) = solana_ledger::shred::merkle::recover(
@@ -485,132 +479,6 @@ fn main2() -> Result<(), Error> {
             };
             let recovered = recovered.collect_vec();
             println!("recovered: {recovered:?}");
-            // if recovered.as_ref().map(|x| x.len()).unwrap_or_default() > 0 {
-            //     println!("recovered: {recovered:?}");
-            // }
-            // let deshred_payload = match solana_ledger::shred::Shredder::deshred(
-            //     new_shreds
-            //         .iter()
-            //         .filter(|x| x.is_data())
-            //         .cloned()
-            //         .collect_vec()
-            //         .as_slice(),
-            // ) {
-            //     Ok(v) => v,
-            //     Err(e) => {
-            //         println!("slot {slot} failed to deshred with err: {e}");
-            //         let recovered = Shredder::try_recovery(new_shreds.clone(), &rs_cache);
-            //         println!("recovered: {recovered:?}");
-            //         if recovered.as_ref().map(|x| x.len()).unwrap_or_default() > 0 {
-            //             println!("recovered: {recovered:?}");
-            //         }
-            //         break; //FIXME turn off
-            //         continue;
-            //     }
-            // };
-            // let entries =
-            //     match bincode::deserialize::<Vec<solana_entry::entry::Entry>>(&deshred_payload) {
-            //         Ok(e) => e,
-            //         Err(e) => {
-            //             println!("slot {slot} failed to deserialize bincode with err: {e}");
-            //             continue;
-            //         }
-            //     };
-            //
-            // slot_entries.extend(entries);
-
-            // println!(
-            //     "slot {}, entries: {}, transactions: {}",
-            //     slot,
-            //     slot_entries.len(),
-            //     slot_entries
-            //         .iter()
-            //         .map(|e| e.transactions.len())
-            //         .sum::<usize>()
-            // );
-            continue;
-            // new_shreds
-            //     .iter()
-            //     .filter(|s| s.data_complete())
-            //     .cloned()
-            //     // .filter_map(|s| s)
-            //     .map(|s| {
-            //         println!(
-            //             "{slot} {} {} {}",
-            //             s.fec_set_index(),
-            //             s.index(),
-            //             s.data_complete(),
-            //         )
-            //     })
-            //     .unique()
-            //     .count();
-            while curr_idx < new_shreds.len() {
-                let shred = &new_shreds[curr_idx];
-
-                if shred.fec_set_index() != curr_fec_index {
-                    // found new FEC set, make sure we outputted entries for previous FEC set
-                    if last_written_fec_index != curr_fec_index {
-                        if last_written_fec_index != u32::MAX {
-                            // try recovery of last FEC set
-                            let recovered = Shredder::try_recovery(
-                                new_shreds[last_written_fec_index as usize..curr_idx - 1].to_vec(),
-                                &rs_cache,
-                            );
-                            println!("recovered: {recovered:?}");
-                            //TODO: insert and bookkeeping
-                        }
-                        curr_fec_index = shred.fec_set_index();
-                    }
-                }
-
-                if !shred.data_complete() {
-                    curr_idx += 1;
-                    continue;
-                }
-
-                // let deshred_payload = match solana_ledger::shred::Shredder::deshred(
-                //     &new_shreds[..=curr_idx]
-                //         .iter()
-                //         .map(|x| x.clone())
-                //         .collect_vec(),
-                // ) {
-                //     Ok(v) => v,
-                //     Err(e) => {
-                //         println!("slot {slot} failed to deshred with err: {e}");
-                //         let recovered =
-                //             Shredder::try_recovery(new_shreds[..=curr_idx].to_vec(), &rs_cache);
-                //         // println!("recovered: {recovered:?}");
-                //         if recovered.as_ref().map(|x| x.len()).unwrap_or_default() > 0 {
-                //             println!("recovered: {recovered:?}");
-                //         }
-                //         break; //FIXME turn off
-                //         continue;
-                //     }
-                // };
-                // let entries =
-                //     match bincode::deserialize::<Vec<solana_entry::entry::Entry>>(&deshred_payload)
-                //     {
-                //         Ok(e) => e,
-                //         Err(e) => {
-                //             println!("slot {slot} failed to deserialize bincode with err: {e}");
-                //             continue;
-                //         }
-                //     };
-                //
-                // slot_entries.extend(entries);
-                // last_written_fec_index = shred.fec_set_index();
-                // curr_idx += 1;
-            }
-            //
-            // println!(
-            //     "slot {}, entries: {}, transactions: {}",
-            //     slot,
-            //     slot_entries.len(),
-            //     slot_entries
-            //         .iter()
-            //         .map(|e| e.transactions.len())
-            //         .sum::<usize>()
-            // );
         }
     }
 

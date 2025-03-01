@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
-    ops::Index,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, RwLock,
@@ -21,7 +20,7 @@ use solana_ledger::shred::{merkle::Shred, ReedSolomonCache, ShredType, Shredder}
 use solana_metrics::{datapoint_info, datapoint_warn};
 use solana_perf::{
     deduper::Deduper,
-    packet::{Meta, Packet, PacketBatch, PacketBatchRecycler},
+    packet::{PacketBatch, PacketBatchRecycler},
     recycler::Recycler,
 };
 use solana_sdk::clock::Slot;
@@ -238,7 +237,7 @@ fn recv_from_channel_and_send_multiple_dest(
             continue;
         };
         match solana_ledger::shred::Shred::new_from_serialized_shred(data.to_vec())
-            .and_then(|shred| Shred::try_from(shred))
+            .and_then(Shred::try_from)
         {
             // fixme vec
             Ok(shred) => {
@@ -246,9 +245,9 @@ fn recv_from_channel_and_send_multiple_dest(
                 let fec_set_index = shred.fec_set_index();
                 all_reconstructed_shreds
                     .entry(slot)
-                    .or_insert_with(HashMap::new)
+                    .or_default()
                     .entry(fec_set_index)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(shred);
                 slot_fec_index_to_iterate.insert((slot, fec_set_index));
             }
@@ -599,6 +598,7 @@ impl ShredMetrics {
 #[cfg(test)]
 mod tests {
     use std::{
+        collections::{HashMap, HashSet},
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         str::FromStr,
         sync::{Arc, Mutex, RwLock},
@@ -607,11 +607,15 @@ mod tests {
         time::Duration,
     };
 
+    use solana_ledger::shred::merkle::Shred;
     use solana_perf::{
         deduper::Deduper,
         packet::{Meta, Packet, PacketBatch},
     };
-    use solana_sdk::packet::{PacketFlags, PACKET_DATA_SIZE};
+    use solana_sdk::{
+        clock::Slot,
+        packet::{PacketFlags, PACKET_DATA_SIZE},
+    };
 
     use crate::forwarder::{recv_from_channel_and_send_multiple_dest, ShredMetrics};
 
@@ -677,6 +681,10 @@ mod tests {
                 thread::spawn(move || listen_and_collect(socket, to_receive));
             });
 
+        let mut all_reconstructed_shreds: HashMap<
+            Slot,
+            HashMap<u32 /* fec_set_index */, HashSet<Shred>>,
+        > = HashMap::new();
         // send packets
         recv_from_channel_and_send_multiple_dest(
             packet_receiver.recv(),
@@ -684,6 +692,7 @@ mod tests {
                 &mut rand::thread_rng(),
                 crate::forwarder::DEDUPER_NUM_BITS,
             ))),
+            &mut all_reconstructed_shreds,
             &udp_sender,
             &Arc::new(dest_socketaddrs),
             false,

@@ -1,6 +1,7 @@
 use std::{
+    collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
-    panic,
+    ops::Index,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, RwLock,
@@ -16,16 +17,17 @@ use itertools::Itertools;
 use jito_protos::trace_shred::TraceShred;
 use log::{debug, error, info, warn};
 use prost::Message;
+use solana_ledger::shred::{merkle::Shred, ReedSolomonCache, ShredType, Shredder};
 use solana_metrics::{datapoint_info, datapoint_warn};
 use solana_perf::{
     deduper::Deduper,
-    packet::{PacketBatch, PacketBatchRecycler},
+    packet::{Meta, Packet, PacketBatch, PacketBatchRecycler},
     recycler::Recycler,
 };
+use solana_sdk::clock::Slot;
 use solana_streamer::{
     sendmmsg::{batch_send, SendPktsError},
-    streamer,
-    streamer::StreamerReceiveStats,
+    streamer::{self, StreamerReceiveStats},
 };
 
 use crate::{resolve_hostname_port, ShredstreamProxyError};
@@ -55,11 +57,14 @@ pub fn start_forwarder_threads(
 
     let recycler: PacketBatchRecycler = Recycler::warmed(100, 1024);
 
-    // spawn a thread for each listen socket. linux kernel will load balance amongst shared sockets
-    solana_net_utils::multi_bind_in_range(src_addr, (src_port, src_port + 1), num_threads)
-        .unwrap_or_else(|_| {
-            panic!("Failed to bind listener sockets. Check that port {src_port} is not in use.")
-        })
+    // multi_bind_in_range returns (port, Vec<UdpSocket>)
+    let sockets =
+        solana_net_utils::multi_bind_in_range(src_addr, (src_port, src_port + 1), num_threads)
+            .unwrap_or_else(|_| {
+                panic!("Failed to bind listener sockets. Check that port {src_port} is not in use.")
+            });
+
+    sockets
         .1
         .into_iter()
         .enumerate()
@@ -72,7 +77,7 @@ pub fn start_forwarder_threads(
                 packet_sender,
                 recycler.clone(),
                 forward_stats.clone(),
-                Duration::default(), // do not coalesce since batching consumes more cpu cycles and adds latency.
+                Duration::default(),
                 false,
                 None,
                 false,
@@ -97,29 +102,39 @@ pub fn start_forwarder_threads(
                     } else {
                         crossbeam_channel::tick(Duration::MAX)
                     };
+
+                    // Track parsed Shred as reconstructed_shreds[ slot ][ fec_set_index ] -> Vec<Shred>
+                    let mut all_reconstructed_shreds: HashMap<
+                        Slot,
+                        HashMap<u32 /* fec_set_index */, HashSet<Shred>>,
+                    > = HashMap::new();
+
                     while !exit.load(Ordering::Relaxed) {
                         crossbeam_channel::select! {
                             // forward packets
                             recv(packet_receiver) -> maybe_packet_batch => {
-                               let res = recv_from_channel_and_send_multiple_dest(
-                                   maybe_packet_batch,
-                                   &deduper,
-                                   &send_socket,
-                                   &local_dest_sockets,
-                                   debug_trace_shred,
-                                   &metrics,
-                               );
+                                let res = recv_from_channel_and_send_multiple_dest(
+                                    maybe_packet_batch,
+                                    &deduper,
+                                    &mut all_reconstructed_shreds,
+                                    &send_socket,
+                                    &local_dest_sockets,
+                                    debug_trace_shred,
+                                    &metrics,
+                                );
 
-                                // avoid unwrap to prevent log spam from panic handler in each thread
-                                if res.is_err(){
+                                // If the channel is closed or error, break out
+                                if res.is_err() {
                                     break;
                                 }
                             }
+
                             // refresh thread-local subscribers
                             recv(refresh_subscribers_tick) -> _ => {
                                 local_dest_sockets = unioned_dest_sockets.load();
                             }
-                            // handle shutdown (avoid using sleep since it will hang under SIGINT)
+
+                            // handle shutdown (avoid using sleep since it can hang)
                             recv(shutdown_receiver) -> _ => {
                                 break;
                             }
@@ -129,16 +144,17 @@ pub fn start_forwarder_threads(
                 })
                 .unwrap();
 
-            [listen_thread, send_thread]
+            vec![listen_thread, send_thread]
         })
         .collect::<Vec<JoinHandle<()>>>()
 }
 
-/// Broadcasts same packet to multiple recipients
-/// Returns Err when unable to receive packets.
+/// Broadcasts the same packet to multiple recipients, parses it into a Shred if possible,
+/// and stores that shred in `all_reconstructed_shreds`.
 fn recv_from_channel_and_send_multiple_dest(
     maybe_packet_batch: Result<PacketBatch, RecvError>,
     deduper: &RwLock<Deduper<2, [u8]>>,
+    all_reconstructed_shreds: &mut HashMap<Slot, HashMap<u32 /* fec_set_index */, HashSet<Shred>>>,
     send_socket: &UdpSocket,
     local_dest_sockets: &[SocketAddr],
     debug_trace_shred: bool,
@@ -160,9 +176,9 @@ fn recv_from_channel_and_send_multiple_dest(
     let num_deduped = solana_perf::deduper::dedup_packets_and_count_discards(
         &deduper.read().unwrap(),
         &mut packet_batch_vec,
-        // |_received_packet, _is_already_marked_as_discard, _is_dup| {},
     );
 
+    // Store stats for each Packet
     packet_batch_vec.iter().for_each(|batch| {
         batch.iter().for_each(|packet| {
             metrics
@@ -170,37 +186,155 @@ fn recv_from_channel_and_send_multiple_dest(
                 .entry(packet.meta().addr)
                 .and_modify(|(discarded, not_discarded)| {
                     *discarded += packet.meta().discard() as u64;
-                    *not_discarded += !packet.meta().discard() as u64;
+                    *not_discarded += (!packet.meta().discard()) as u64;
                 })
                 .or_insert_with(|| {
                     (
                         packet.meta().discard() as u64,
-                        !packet.meta().discard() as u64,
+                        (!packet.meta().discard()) as u64,
                     )
                 });
         });
     });
 
+    // send out
     local_dest_sockets.iter().for_each(|outgoing_socketaddr| {
-        let packets_with_dest = packet_batch_vec[0].iter().filter_map(|pkt| {
-            let data = pkt.data(..)?;
-            let addr = outgoing_socketaddr;
-            Some((data, addr))
-        }).collect::<Vec<(&[u8], &SocketAddr)>>();
+        let packets_with_dest = packet_batch_vec[0]
+            .iter()
+            .filter_map(|pkt| {
+                let data = pkt.data(..)?;
+                let addr = outgoing_socketaddr;
+                Some((data, addr))
+            })
+            .collect::<Vec<(&[u8], &SocketAddr)>>();
 
         match batch_send(send_socket, &packets_with_dest) {
             Ok(_) => {
-                metrics.agg_success_forward.fetch_add(packets_with_dest.len() as u64, Ordering::Relaxed);
+                metrics
+                    .agg_success_forward
+                    .fetch_add(packets_with_dest.len() as u64, Ordering::Relaxed);
                 metrics.duplicate.fetch_add(num_deduped, Ordering::Relaxed);
             }
             Err(SendPktsError::IoError(err, num_failed)) => {
-                metrics.agg_fail_forward.fetch_add(packets_with_dest.len() as u64, Ordering::Relaxed);
-                metrics.duplicate.fetch_add(num_failed as u64, Ordering::Relaxed);
-                error!("Failed to send batch of size {} to {outgoing_socketaddr:?}. {num_failed} packets failed. Error: {err}", packets_with_dest.len());
+                metrics
+                    .agg_fail_forward
+                    .fetch_add(packets_with_dest.len() as u64, Ordering::Relaxed);
+                metrics
+                    .duplicate
+                    .fetch_add(num_failed as u64, Ordering::Relaxed);
+                error!(
+                    "Failed to send batch of size {} to {outgoing_socketaddr:?}. \
+                     {num_failed} packets failed. Error: {err}",
+                    packets_with_dest.len()
+                );
             }
         }
     });
 
+    let mut slot_entries = Vec::new();
+    let mut slot_fec_index_to_iterate = HashSet::new();
+    for packet in &packet_batch_vec[0] {
+        let Some(data) = packet.data(..) else {
+            continue;
+        };
+        match solana_ledger::shred::Shred::new_from_serialized_shred(data.to_vec())
+            .and_then(|shred| Shred::try_from(shred))
+        {
+            // fixme vec
+            Ok(shred) => {
+                let slot = shred.common_header().slot;
+                let fec_set_index = shred.fec_set_index();
+                all_reconstructed_shreds
+                    .entry(slot)
+                    .or_insert_with(HashMap::new)
+                    .entry(fec_set_index)
+                    .or_insert_with(HashSet::new)
+                    .insert(shred);
+                slot_fec_index_to_iterate.insert((slot, fec_set_index));
+            }
+            Err(e) => {
+                warn!("Failed to reconstruct shred. Err: {e:?}");
+            }
+        }
+    }
+    let rs_cache = ReedSolomonCache::default();
+    for (slot, fec_set_index) in slot_fec_index_to_iterate {
+        let Some(shreds) = all_reconstructed_shreds
+            .get_mut(&slot)
+            .and_then(|fec_set_indexes| fec_set_indexes.get_mut(&fec_set_index))
+        else {
+            continue;
+        };
+
+        let (num_expected_shreds, num_data_shreds) = can_recover(shreds);
+        println!("expected {num_expected_shreds}"); // TODO: check if sane
+
+        // haven't received last data shred, haven't seen any coding shreds, so wait until more arrive
+        if num_expected_shreds == 0
+            || (num_data_shreds < num_expected_shreds && shreds.len() < num_data_shreds as usize)
+        {
+            // not enough data shreds, not enough shreds to recover
+            continue;
+        }
+
+        if num_data_shreds < num_expected_shreds && shreds.len() as u16 >= num_data_shreds {
+            // recover
+            let merkle_shreds = shreds.iter().cloned().collect_vec();
+            let Ok(recovered) = solana_ledger::shred::merkle::recover(merkle_shreds, &rs_cache)
+                .inspect_err(|e| warn!("Failed to recover shreds: {e}"))
+            else {
+                continue;
+            };
+
+            let mut recovered_count = 0;
+            for shred in recovered {
+                match shred {
+                    Ok(shred) => {
+                        recovered_count += 1;
+                        shreds.insert(shred);
+                    }
+                    Err(e) => warn!(
+                        "Failed to recover shreds for slot {slot} fec set: {fec_set_index}: {e}"
+                    ),
+                }
+            }
+            println!("Recovered {}", recovered_count);
+        }
+
+        let deduped_shreds = shreds
+            .iter()
+            .filter(|s| s.shred_type() == ShredType::Data)
+            .sorted_by_key(|s| s.index())
+            .map(|s| s.payload())
+            .collect_vec();
+        let deshred_payload = match Shredder::deshred(deduped_shreds) {
+            Ok(v) => v,
+            Err(e) => {
+                println!(
+                    "slot {slot} failed to deshred fec_set_index {fec_set_index} with err: {e}"
+                );
+                continue;
+            }
+        };
+        let entries =
+            match bincode::deserialize::<Vec<solana_entry::entry::Entry>>(&deshred_payload) {
+                Ok(e) => e,
+                Err(e) => {
+                    println!("slot {slot} failed to deserialize bincode with err: {e}");
+                    continue;
+                }
+            };
+        slot_entries.extend(entries);
+        if let Some(fec_set) = all_reconstructed_shreds.get_mut(&slot) {
+            fec_set.remove(&fec_set_index);
+            if fec_set.is_empty() {
+                all_reconstructed_shreds.remove(&slot);
+            }
+        }
+        // todo: remove old slots if empty
+    }
+
+    // For debugging the special "TraceShred" format
     if debug_trace_shred {
         packet_batch_vec[0]
             .iter()
@@ -219,7 +353,34 @@ fn recv_from_channel_and_send_multiple_dest(
                 );
             });
     }
+
     Ok(())
+}
+
+/// check if we can reconstruct (having minimum number of data + coding shreds)
+fn can_recover(
+    shreds: &HashSet<Shred>,
+) -> (
+    u16, /* num_expected_shreds */
+    u16, /* num_data_shreds */
+) {
+    let mut num_expected_shreds = 0;
+    let mut data_shred_count = 0;
+    for shred in shreds {
+        match shred {
+            Shred::ShredCode(s) => {
+                println!("num_coding: {}", s.coding_header.num_coding_shreds); //FIXME remove
+                num_expected_shreds = s.coding_header.num_coding_shreds;
+            }
+            Shred::ShredData(s) => {
+                data_shred_count += 1;
+                if s.last_in_slot() {
+                    num_expected_shreds = shred.index() as u16 + 1;
+                }
+            }
+        }
+    }
+    (num_expected_shreds, data_shred_count)
 }
 
 /// Starts a thread that updates our destinations used by the forwarder threads

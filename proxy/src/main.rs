@@ -23,7 +23,7 @@ use itertools::Itertools;
 use log::*;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use solana_client::client_error::{reqwest, ClientError};
-use solana_ledger::shred::{shred_code::ShredCode, ReedSolomonCache, Shred, Shredder};
+use solana_ledger::shred::{ReedSolomonCache, Shred, Shredder};
 use solana_metrics::set_host_id;
 use solana_perf::deduper::Deduper;
 use solana_sdk::{clock::Slot, signature::read_keypair_file};
@@ -192,6 +192,7 @@ fn shutdown_notifier(exit: Arc<AtomicBool>) -> io::Result<(Sender<()>, Receiver<
     Ok((s, r))
 }
 
+pub type ReconstructedShredsMap = HashMap<Slot, HashMap<u32 /* fec_set_index */, Vec<Shred>>>;
 fn main() -> Result<(), ShredstreamProxyError> {
     env_logger::builder().init();
     main2().unwrap();
@@ -412,7 +413,7 @@ fn main2() -> Result<(), Error> {
     // listen_and_write_shreds();
     // return Ok(());
     let packets = {
-        let mut file = std::fs::File::open("udp_data.bin")?;
+        let mut file = std::fs::File::open("udp_data-orig.bin")?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
         Packets::try_from_slice(&buffer)?
@@ -453,7 +454,9 @@ fn main2() -> Result<(), Error> {
             // new_shreds.sort_by_key(|s| (s.index(), s.is_code()));
             new_shreds.sort_by_key(|s| (s.is_code(), s.index()));
             new_shreds.dedup();
-            new_shreds[0] = new_shreds[1].clone();
+            new_shreds.remove(0);
+            new_shreds.sort_by_key(|s| (50000 - s.index()));
+            // new_shreds[0] = new_shreds[1].clone();
 
             // let mut slot_entries = Vec::new();
             let mut curr_idx = 0;
@@ -461,11 +464,30 @@ fn main2() -> Result<(), Error> {
             let mut curr_fec_index = 0;
             let rs_cache = ReedSolomonCache::default();
 
-            let recovered = Shredder::try_recovery(new_shreds.clone(), &rs_cache);
+            let Ok(recovered) = solana_ledger::shred::merkle::recover(
+                new_shreds
+                    .iter()
+                    .filter_map(|shred| match shred {
+                        Shred::ShredCode(solana_ledger::shred::shred_code::ShredCode::Merkle(
+                            s,
+                        )) => Some(solana_ledger::shred::merkle::Shred::ShredCode(s.clone())),
+                        Shred::ShredData(solana_ledger::shred::shred_data::ShredData::Merkle(
+                            s,
+                        )) => Some(solana_ledger::shred::merkle::Shred::ShredData(s.clone())),
+
+                        _ => None,
+                    })
+                    .collect_vec(),
+                &rs_cache,
+            )
+            .inspect_err(|e| warn!("Failed to recover shreds: {e}")) else {
+                continue;
+            };
+            let recovered = recovered.collect_vec();
             println!("recovered: {recovered:?}");
-            if recovered.as_ref().map(|x| x.len()).unwrap_or_default() > 0 {
-                println!("recovered: {recovered:?}");
-            }
+            // if recovered.as_ref().map(|x| x.len()).unwrap_or_default() > 0 {
+            //     println!("recovered: {recovered:?}");
+            // }
             // let deshred_payload = match solana_ledger::shred::Shredder::deshred(
             //     new_shreds
             //         .iter()

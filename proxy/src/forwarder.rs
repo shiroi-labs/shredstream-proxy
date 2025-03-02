@@ -230,6 +230,35 @@ fn recv_from_channel_and_send_multiple_dest(
         }
     });
 
+    reconstruct_shreds(&mut packet_batch_vec, all_reconstructed_shreds);
+
+    // For debugging the special "TraceShred" format
+    if debug_trace_shred {
+        packet_batch_vec[0]
+            .iter()
+            .filter_map(|p| TraceShred::decode(p.data(..)?).ok())
+            .filter(|t| t.created_at.is_some())
+            .for_each(|trace_shred| {
+                let elapsed = trace_shred_received_time
+                    .duration_since(SystemTime::try_from(trace_shred.created_at.unwrap()).unwrap())
+                    .unwrap_or_default();
+
+                datapoint_info!(
+                    "shredstream_proxy-trace_shred_latency",
+                    "trace_region" => trace_shred.region,
+                    ("trace_seq_num", trace_shred.seq_num as i64, i64),
+                    ("elapsed_micros", elapsed.as_micros(), i64),
+                );
+            });
+    }
+
+    Ok(())
+}
+
+fn reconstruct_shreds(
+    packet_batch_vec: &[PacketBatch],
+    all_reconstructed_shreds: &mut HashMap<Slot, HashMap<u32, HashSet<Shred>>>,
+) {
     let mut slot_entries = Vec::new();
     let mut slot_fec_index_to_iterate = HashSet::new();
     for packet in &packet_batch_vec[0] {
@@ -239,7 +268,6 @@ fn recv_from_channel_and_send_multiple_dest(
         match solana_ledger::shred::Shred::new_from_serialized_shred(data.to_vec())
             .and_then(Shred::try_from)
         {
-            // fixme vec
             Ok(shred) => {
                 let slot = shred.common_header().slot;
                 let fec_set_index = shred.fec_set_index();
@@ -332,28 +360,6 @@ fn recv_from_channel_and_send_multiple_dest(
         }
         // todo: remove old slots if empty
     }
-
-    // For debugging the special "TraceShred" format
-    if debug_trace_shred {
-        packet_batch_vec[0]
-            .iter()
-            .filter_map(|p| TraceShred::decode(p.data(..)?).ok())
-            .filter(|t| t.created_at.is_some())
-            .for_each(|trace_shred| {
-                let elapsed = trace_shred_received_time
-                    .duration_since(SystemTime::try_from(trace_shred.created_at.unwrap()).unwrap())
-                    .unwrap_or_default();
-
-                datapoint_info!(
-                    "shredstream_proxy-trace_shred_latency",
-                    "trace_region" => trace_shred.region,
-                    ("trace_seq_num", trace_shred.seq_num as i64, i64),
-                    ("elapsed_micros", elapsed.as_micros(), i64),
-                );
-            });
-    }
-
-    Ok(())
 }
 
 /// check if we can reconstruct (having minimum number of data + coding shreds)
@@ -607,10 +613,13 @@ mod tests {
         time::Duration,
     };
 
+    use bincode::serialize;
     use itertools::Itertools;
     use rand::Rng;
-    use solana_ledger::shred::{
-        merkle, merkle::Shred, Error, ProcessShredsStats, ReedSolomonCache,
+    use solana_entry::entry::{create_ticks, next_entry_mut, Entry};
+    use solana_ledger::{
+        blockstore::make_slot_entries_with_transactions,
+        shred::{merkle, merkle::Shred, Error, ProcessShredsStats, ReedSolomonCache, Shredder},
     };
     use solana_perf::{
         deduper::Deduper,
@@ -618,12 +627,14 @@ mod tests {
     };
     use solana_sdk::{
         clock::Slot,
-        hash::Hash,
+        hash::{hash, Hash},
         packet::{PacketFlags, PACKET_DATA_SIZE},
         signature::Keypair,
     };
 
-    use crate::forwarder::{recv_from_channel_and_send_multiple_dest, ShredMetrics};
+    use crate::forwarder::{
+        reconstruct_shreds, recv_from_channel_and_send_multiple_dest, ShredMetrics,
+    };
 
     fn listen_and_collect(listen_socket: UdpSocket, received_packets: Arc<Mutex<Vec<Vec<u8>>>>) {
         let mut buf = [0u8; PACKET_DATA_SIZE];
@@ -632,6 +643,24 @@ mod tests {
             received_packets.lock().unwrap().push(Vec::from(buf));
         }
     }
+
+    // taken from https://github.com/jito-labs/jito-solana/blob/4326f37332a223ed94f2204308e454b64d9bc852/ledger/src/blockstore.rs#L5414
+    // pub fn make_slot_entries_with_transactions(num_entries: u64) -> Vec<Entry> {
+    //     let mut entries: Vec<Entry> = Vec::new();
+    //     for x in 0..num_entries {
+    //         let transaction = Transaction::new_with_compiled_instructions(
+    //             &[&Keypair::new()],
+    //             &[pubkey::new_rand()],
+    //             Hash::default(),
+    //             vec![pubkey::new_rand()],
+    //             vec![CompiledInstruction::new(1, &(), vec![0])],
+    //         );
+    //         entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
+    //         let mut tick = create_ticks(1, 0, hash(&serialize(&x).unwrap()));
+    //         entries.append(&mut tick);
+    //     }
+    //     entries
+    // }
 
     // taken from https://github.com/jito-labs/jito-solana/blob/3d6bbe6838083c087a7663daf1cae46920286cd6/ledger/src/shred.rs#L1034
     pub fn make_merkle_shreds_for_tests<R: Rng>(
@@ -675,8 +704,25 @@ mod tests {
 
     fn test_recover_shreds_runner(is_last_in_slot: bool) {
         let mut rng = rand::thread_rng();
-        let slot = 18_291;
-        let shreds: Vec<_> = make_merkle_shreds_for_tests(
+        let slot = 11_111;
+        let entries1 = make_slot_entries_with_transactions(1);
+        let entries2 = make_slot_entries_with_transactions(1);
+        let leader_keypair = Arc::new(Keypair::new());
+        let reed_solomon_cache = ReedSolomonCache::default();
+        let shredder = Shredder::new(slot, 0, 0, 0).unwrap();
+        let chained_merkle_root = Some(Hash::new_from_array(rand::thread_rng().gen()));
+        let (shreds, _) = shredder.entries_to_shreds(
+            &leader_keypair,
+            entries1.as_slice(),
+            true, // is_last_in_slot
+            chained_merkle_root,
+            0,    // next_shred_index
+            0,    // next_code_index,
+            true, // merkle_variant
+            &reed_solomon_cache,
+            &mut ProcessShredsStats::default(),
+        );
+        let shreds: Vec<_> = make_m merkle_shreds_for_tests(
             &mut rng,
             slot,
             1200 * 5, // data_size
@@ -701,30 +747,17 @@ mod tests {
         assert_eq!(shreds.iter().map(Shred::fec_set_index).dedup().count(), 1);
 
         let packet_batch = PacketBatch::new(packets);
-        let udp_sender = UdpSocket::bind("0.0.0.0:10000").unwrap();
-
-        let (packet_sender, packet_receiver) = crossbeam_channel::unbounded::<PacketBatch>();
-        packet_sender.send(packet_batch).unwrap();
 
         let mut all_reconstructed_shreds: HashMap<
             Slot,
             HashMap<u32 /* fec_set_index */, HashSet<Shred>>,
         > = HashMap::new();
-        // send packets
-        recv_from_channel_and_send_multiple_dest(
-            packet_receiver.recv(),
-            &Arc::new(RwLock::new(Deduper::<2, [u8]>::new(
-                &mut rng,
-                crate::forwarder::DEDUPER_NUM_BITS,
-            ))),
+        reconstruct_shreds(
+            [packet_batch.clone()].as_slice(),
             &mut all_reconstructed_shreds,
-            &udp_sender,
-            &Arc::new(vec![]),
-            false,
-            &Arc::new(ShredMetrics::new()),
-        )
-        .unwrap();
+        );
 
+        // expect to recover 1 fec set, ? entries
         // todo: check channel results
     }
 

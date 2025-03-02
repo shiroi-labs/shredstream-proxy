@@ -607,14 +607,20 @@ mod tests {
         time::Duration,
     };
 
-    use solana_ledger::shred::merkle::Shred;
+    use itertools::Itertools;
+    use rand::Rng;
+    use solana_ledger::shred::{
+        merkle, merkle::Shred, Error, ProcessShredsStats, ReedSolomonCache,
+    };
     use solana_perf::{
         deduper::Deduper,
         packet::{Meta, Packet, PacketBatch},
     };
     use solana_sdk::{
         clock::Slot,
+        hash::Hash,
         packet::{PacketFlags, PACKET_DATA_SIZE},
+        signature::Keypair,
     };
 
     use crate::forwarder::{recv_from_channel_and_send_multiple_dest, ShredMetrics};
@@ -625,6 +631,101 @@ mod tests {
             listen_socket.recv(&mut buf).unwrap();
             received_packets.lock().unwrap().push(Vec::from(buf));
         }
+    }
+
+    // taken from https://github.com/jito-labs/jito-solana/blob/3d6bbe6838083c087a7663daf1cae46920286cd6/ledger/src/shred.rs#L1034
+    pub fn make_merkle_shreds_for_tests<R: Rng>(
+        rng: &mut R,
+        slot: Slot,
+        data_size: usize,
+        chained: bool,
+        is_last_in_slot: bool,
+    ) -> Result<Vec<merkle::Shred>, Error> {
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap();
+        let chained_merkle_root = chained.then(|| Hash::new_from_array(rng.gen()));
+        let parent_offset = rng.gen_range(1..=u16::try_from(slot).unwrap_or(u16::MAX));
+        let parent_slot = slot.checked_sub(u64::from(parent_offset)).unwrap();
+        let mut data = vec![0u8; data_size];
+        rng.fill(&mut data[..]);
+        merkle::make_shreds_from_data(
+            &thread_pool,
+            &Keypair::new(),
+            chained_merkle_root,
+            &data[..],
+            slot,
+            parent_slot,
+            rng.gen(),            // shred_version
+            rng.gen_range(1..64), // reference_tick
+            is_last_in_slot,
+            rng.gen_range(0..671), // next_shred_index
+            rng.gen_range(0..781), // next_code_index
+            &ReedSolomonCache::default(),
+            &mut ProcessShredsStats::default(),
+        )
+    }
+
+    #[test]
+    fn test_recover_shreds() {
+        test_recover_shreds_runner(true);
+        test_recover_shreds_runner(false);
+    }
+
+    fn test_recover_shreds_runner(is_last_in_slot: bool) {
+        let mut rng = rand::thread_rng();
+        let slot = 18_291;
+        let shreds: Vec<_> = make_merkle_shreds_for_tests(
+            &mut rng,
+            slot,
+            1200 * 5, // data_size
+            false,
+            is_last_in_slot,
+        )
+        .unwrap();
+        let packets = shreds
+            .iter()
+            .map(|s| {
+                Packet::new(
+                    <[u8; PACKET_DATA_SIZE]>::try_from(s.payload().to_vec()).unwrap(),
+                    Meta {
+                        size: s.payload().len(),
+                        addr: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                        port: 48289, // received on random port
+                        flags: PacketFlags::empty(),
+                    },
+                )
+            })
+            .collect_vec();
+        assert_eq!(shreds.iter().map(Shred::fec_set_index).dedup().count(), 1);
+
+        let packet_batch = PacketBatch::new(packets);
+        let udp_sender = UdpSocket::bind("0.0.0.0:10000").unwrap();
+
+        let (packet_sender, packet_receiver) = crossbeam_channel::unbounded::<PacketBatch>();
+        packet_sender.send(packet_batch).unwrap();
+
+        let mut all_reconstructed_shreds: HashMap<
+            Slot,
+            HashMap<u32 /* fec_set_index */, HashSet<Shred>>,
+        > = HashMap::new();
+        // send packets
+        recv_from_channel_and_send_multiple_dest(
+            packet_receiver.recv(),
+            &Arc::new(RwLock::new(Deduper::<2, [u8]>::new(
+                &mut rng,
+                crate::forwarder::DEDUPER_NUM_BITS,
+            ))),
+            &mut all_reconstructed_shreds,
+            &udp_sender,
+            &Arc::new(vec![]),
+            false,
+            &Arc::new(ShredMetrics::new()),
+        )
+        .unwrap();
+
+        // todo: check channel results
     }
 
     #[test]

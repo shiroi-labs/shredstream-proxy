@@ -34,5 +34,8 @@ tonic = { workspace = true }
 solana-ledger = { workspace = true }
 solana-entry = { workspace = true }
 
+[dev-dependencies]
+rayon = { workspace = true }
+
 borsh = "1.5.3"
 bincode = "1.3.3"

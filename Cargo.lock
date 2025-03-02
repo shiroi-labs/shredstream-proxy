@@ -82,7 +82,7 @@ dependencies = [
 [[package]]
 name = "agave-transaction-view"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "solana-hash",
  "solana-message",
@@ -1062,9 +1062,9 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.15.10"
+version = "0.15.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea3c6ecd8059b57859df5c69830340ed3c41d30e3da0c1cbed90a96ac853041b"
+checksum = "054ccb5b10f9f2cbf51eb355ca1d05c2d279ce1804688d0db74b4733a5aeafd8"
 dependencies = [
  "encode_unicode",
  "libc",
@@ -2538,6 +2538,7 @@ dependencies = [
  "prost 0.12.6",
  "prost-types 0.12.6",
  "rand 0.8.5",
+ "rayon",
  "reqwest",
  "serde_json",
  "signal-hook",
@@ -4533,7 +4534,7 @@ dependencies = [
 [[package]]
 name = "solana-account-decoder"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "Inflector",
  "base64 0.22.1",
@@ -4587,7 +4588,7 @@ dependencies = [
 [[package]]
 name = "solana-account-decoder-client-types"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "base64 0.22.1",
  "bs58",
@@ -4615,7 +4616,7 @@ dependencies = [
 [[package]]
 name = "solana-accounts-db"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "ahash 0.8.11",
  "bincode",
@@ -4705,7 +4706,7 @@ dependencies = [
 [[package]]
 name = "solana-address-lookup-table-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -4846,7 +4847,7 @@ dependencies = [
 [[package]]
 name = "solana-bpf-loader-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bincode",
  "libsecp256k1",
@@ -4894,7 +4895,7 @@ dependencies = [
 [[package]]
 name = "solana-bucket-map"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bv",
  "bytemuck",
@@ -4913,7 +4914,7 @@ dependencies = [
 [[package]]
 name = "solana-builtins"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "solana-address-lookup-table-program 2.2.0 (git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery)",
  "solana-bpf-loader-program 2.2.0 (git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery)",
@@ -4957,7 +4958,7 @@ dependencies = [
 [[package]]
 name = "solana-builtins-default-costs"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "ahash 0.8.11",
  "lazy_static",
@@ -5090,7 +5091,7 @@ dependencies = [
 [[package]]
 name = "solana-compute-budget"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "solana-fee-structure",
  "solana-program-entrypoint",
@@ -5120,7 +5121,7 @@ dependencies = [
 [[package]]
 name = "solana-compute-budget-instruction"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "log",
  "solana-borsh",
@@ -5163,7 +5164,7 @@ dependencies = [
 [[package]]
 name = "solana-compute-budget-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "qualifier_attr",
  "solana-program-runtime 2.2.0 (git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery)",
@@ -5196,7 +5197,7 @@ dependencies = [
 [[package]]
 name = "solana-config-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bincode",
  "chrono",
@@ -5243,7 +5244,7 @@ dependencies = [
 [[package]]
 name = "solana-cost-model"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "ahash 0.8.11",
  "lazy_static",
@@ -5299,7 +5300,7 @@ dependencies = [
 [[package]]
 name = "solana-curve25519"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bytemuck",
  "bytemuck_derive",
@@ -5380,7 +5381,7 @@ dependencies = [
 [[package]]
 name = "solana-entry"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bincode",
  "crossbeam-channel",
@@ -5508,7 +5509,7 @@ dependencies = [
 [[package]]
 name = "solana-fee"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "solana-feature-set",
  "solana-fee-structure",
@@ -5620,7 +5621,7 @@ dependencies = [
 [[package]]
 name = "solana-inline-spl"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bytemuck",
  "solana-pubkey",
@@ -5708,7 +5709,7 @@ dependencies = [
 [[package]]
 name = "solana-lattice-hash"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -5719,7 +5720,7 @@ dependencies = [
 [[package]]
 name = "solana-ledger"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -5864,7 +5865,7 @@ dependencies = [
 [[package]]
 name = "solana-loader-v4-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "log",
  "qualifier_attr",
@@ -5898,7 +5899,7 @@ dependencies = [
 [[package]]
 name = "solana-log-collector"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "log",
 ]
@@ -5923,7 +5924,7 @@ checksum = "504bfa21b291ad23edf2a9499929b653004f8585acbd32ee1ce186403a2d092d"
 [[package]]
 name = "solana-measure"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 
 [[package]]
 name = "solana-merkle-tree"
@@ -5939,7 +5940,7 @@ dependencies = [
 [[package]]
 name = "solana-merkle-tree"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "fast-math",
  "solana-hash",
@@ -5990,7 +5991,7 @@ dependencies = [
 [[package]]
 name = "solana-metrics"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "crossbeam-channel",
  "gethostname",
@@ -6138,7 +6139,7 @@ dependencies = [
 [[package]]
 name = "solana-perf"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "ahash 0.8.11",
  "bincode",
@@ -6191,7 +6192,7 @@ dependencies = [
 [[package]]
 name = "solana-poseidon"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "ark-bn254",
  "light-poseidon",
@@ -6414,7 +6415,7 @@ dependencies = [
 [[package]]
 name = "solana-program-runtime"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "base64 0.22.1",
  "bincode",
@@ -6558,7 +6559,7 @@ dependencies = [
 [[package]]
 name = "solana-rayon-threadlimit"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -6715,7 +6716,7 @@ dependencies = [
 [[package]]
 name = "solana-runtime"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "ahash 0.8.11",
  "aquamarine",
@@ -6821,7 +6822,7 @@ dependencies = [
 [[package]]
 name = "solana-runtime-transaction"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "agave-transaction-view 2.2.0 (git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery)",
  "log",
@@ -7198,7 +7199,7 @@ dependencies = [
 [[package]]
 name = "solana-stake-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bincode",
  "log",
@@ -7226,7 +7227,7 @@ dependencies = [
 [[package]]
 name = "solana-storage-bigtable"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "backoff",
  "bincode",
@@ -7267,7 +7268,7 @@ dependencies = [
 [[package]]
 name = "solana-storage-proto"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bincode",
  "bs58",
@@ -7338,7 +7339,7 @@ dependencies = [
 [[package]]
 name = "solana-svm"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "ahash 0.8.11",
  "itertools 0.12.1",
@@ -7382,7 +7383,7 @@ dependencies = [
 [[package]]
 name = "solana-svm-rent-collector"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "solana-sdk",
 ]
@@ -7404,7 +7405,7 @@ dependencies = [
 [[package]]
 name = "solana-svm-transaction"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "solana-hash",
  "solana-message",
@@ -7459,7 +7460,7 @@ dependencies = [
 [[package]]
 name = "solana-system-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bincode",
  "log",
@@ -7592,7 +7593,7 @@ dependencies = [
 [[package]]
 name = "solana-timings"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "eager",
  "enum-iterator",
@@ -7722,7 +7723,7 @@ dependencies = [
 [[package]]
 name = "solana-transaction-status"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "Inflector",
  "base64 0.22.1",
@@ -7785,7 +7786,7 @@ dependencies = [
 [[package]]
 name = "solana-transaction-status-client-types"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "base64 0.22.1",
  "bincode",
@@ -7817,7 +7818,7 @@ dependencies = [
 [[package]]
 name = "solana-type-overrides"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "lazy_static",
  "rand 0.8.5",
@@ -7842,7 +7843,7 @@ dependencies = [
 [[package]]
 name = "solana-unified-scheduler-logic"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "assert_matches",
  "solana-pubkey",
@@ -7874,7 +7875,7 @@ dependencies = [
 [[package]]
 name = "solana-version"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "semver",
  "serde",
@@ -7887,7 +7888,7 @@ dependencies = [
 [[package]]
 name = "solana-vote"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "itertools 0.12.1",
  "log",
@@ -7968,7 +7969,7 @@ dependencies = [
 [[package]]
 name = "solana-vote-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bincode",
  "log",
@@ -8000,7 +8001,7 @@ dependencies = [
 [[package]]
 name = "solana-zk-elgamal-proof-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bytemuck",
  "num-derive",
@@ -8052,7 +8053,7 @@ dependencies = [
 [[package]]
 name = "solana-zk-sdk"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "aes-gcm-siv",
  "base64 0.22.1",
@@ -8088,7 +8089,7 @@ dependencies = [
 [[package]]
 name = "solana-zk-token-proof-program"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "bytemuck",
  "num-derive",
@@ -8104,7 +8105,7 @@ dependencies = [
 [[package]]
 name = "solana-zk-token-sdk"
 version = "2.2.0"
-source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#8d2d7e5d82a68617bbda658e28cd8c5adfba4ed7"
+source = "git+https://github.com/jito-foundation/jito-solana.git?branch=eric%2Fv2.2-merkle-recovery#3d6bbe6838083c087a7663daf1cae46920286cd6"
 dependencies = [
  "aes-gcm-siv",
  "base64 0.22.1",

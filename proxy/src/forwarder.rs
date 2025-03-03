@@ -88,6 +88,7 @@ pub fn start_forwarder_threads(
             let metrics = metrics.clone();
             let shutdown_receiver = shutdown_receiver.clone();
             let mut deshredded_entries = Vec::new();
+            let rs_cache = ReedSolomonCache::default();
             let exit = exit.clone();
 
             let send_thread = Builder::new()
@@ -119,6 +120,7 @@ pub fn start_forwarder_threads(
                                     &deduper,
                                     &mut all_reconstructed_shreds,
                                     &mut deshredded_entries,
+                                    &rs_cache,
                                     &send_socket,
                                     &local_dest_sockets,
                                     debug_trace_shred,
@@ -158,6 +160,7 @@ fn recv_from_channel_and_send_multiple_dest(
     deduper: &RwLock<Deduper<2, [u8]>>,
     all_reconstructed_shreds: &mut HashMap<Slot, HashMap<u32 /* fec_set_index */, HashSet<Shred>>>,
     deshredded_entries: &mut Vec<Entry>,
+    rs_cache: &ReedSolomonCache,
     send_socket: &UdpSocket,
     local_dest_sockets: &[SocketAddr],
     debug_trace_shred: bool,
@@ -235,9 +238,10 @@ fn recv_from_channel_and_send_multiple_dest(
     });
 
     reconstruct_shreds(
-        &mut packet_batch_vec,
+        &packet_batch_vec,
         all_reconstructed_shreds,
         deshredded_entries,
+        rs_cache,
     );
 
     // For debugging the special "TraceShred" format
@@ -269,6 +273,7 @@ fn reconstruct_shreds(
     packet_batch_vec: &[PacketBatch],
     all_reconstructed_shreds: &mut HashMap<Slot, HashMap<u32, HashSet<Shred>>>,
     deshredded_entries: &mut Vec<Entry>,
+    rs_cache: &ReedSolomonCache,
 ) -> usize {
     deshredded_entries.clear();
     let mut slot_fec_index_to_iterate = HashSet::new();
@@ -295,7 +300,6 @@ fn reconstruct_shreds(
             }
         }
     }
-    let rs_cache = ReedSolomonCache::default();
     let mut recovered_count = 0;
     for (slot, fec_set_index) in slot_fec_index_to_iterate {
         let Some(shreds) = all_reconstructed_shreds
@@ -306,8 +310,6 @@ fn reconstruct_shreds(
         };
 
         let (num_expected_shreds, num_data_shreds) = can_recover(shreds);
-        println!("expected {num_expected_shreds}"); // TODO: check if sane
-
         // haven't received last data shred, haven't seen any coding shreds, so wait until more arrive
         if num_expected_shreds == 0
             || (num_data_shreds < num_expected_shreds && shreds.len() < num_data_shreds as usize)
@@ -336,7 +338,6 @@ fn reconstruct_shreds(
                     ),
                 }
             }
-            println!("Recovered {}", recovered_count);
         }
 
         let sorted_shreds = shreds
@@ -362,15 +363,6 @@ fn reconstruct_shreds(
             .sorted_by_key(|s| s.index())
             .map(|s| s.payload().as_ref())
             .collect_vec();
-        let a = match &sorted_shreds.last().unwrap() {
-            Shred::ShredCode(_) => {
-                panic!("fail")
-            }
-            Shred::ShredData(s) => s.data_complete(),
-        };
-        if a {
-            println!("data complete",);
-        }
 
         let deshred_payload = match Shredder::deshred(sorted_payloads) {
             Ok(v) => v,
@@ -797,6 +789,8 @@ mod tests {
             num_entry_groups
         );
 
+        let rs_cache = ReedSolomonCache::default();
+
         // Test 1: all shreds provided
         let packet_batch = PacketBatch::new(packets.clone());
         let mut deshredded_entries = Vec::new();
@@ -808,6 +802,7 @@ mod tests {
             [packet_batch.clone()].as_slice(),
             &mut all_reconstructed_shreds,
             &mut deshredded_entries,
+            &rs_cache,
         );
         assert_eq!(recovered_count, 0);
         assert_eq!(
@@ -836,6 +831,7 @@ mod tests {
             [packet_batch.clone()].as_slice(),
             &mut all_reconstructed_shreds,
             &mut deshredded_entries,
+            &rs_cache,
         );
         assert!(recovered_count > entries.len() / 3);
         assert_eq!(
@@ -913,6 +909,7 @@ mod tests {
             ))),
             &mut all_reconstructed_shreds,
             &mut Vec::new(),
+            &ReedSolomonCache::default(),
             &udp_sender,
             &Arc::new(dest_socketaddrs),
             false,

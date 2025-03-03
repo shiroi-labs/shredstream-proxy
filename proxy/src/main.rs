@@ -195,8 +195,8 @@ fn shutdown_notifier(exit: Arc<AtomicBool>) -> io::Result<(Sender<()>, Receiver<
 pub type ReconstructedShredsMap = HashMap<Slot, HashMap<u32 /* fec_set_index */, Vec<Shred>>>;
 fn main() -> Result<(), ShredstreamProxyError> {
     env_logger::builder().init();
-    main2().unwrap();
-    return Ok(());
+    // main2().unwrap();
+    // return Ok(());
     let all_args: Args = Args::parse();
 
     let shredstream_args = all_args.shredstream_args.clone();
@@ -436,9 +436,7 @@ fn main2() -> Result<(), Error> {
                 .ok()
         })
         .for_each(|shred| {
-            let slot_shreds = reconstructed_shreds
-                .entry(shred.slot())
-                .or_default();
+            let slot_shreds = reconstructed_shreds.entry(shred.slot()).or_default();
             slot_shreds
                 .entry(shred.fec_set_index())
                 .or_default()

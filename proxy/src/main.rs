@@ -404,7 +404,7 @@ fn listen_and_write_shreds() -> std::io::Result<()> {
             dbg!(&map);
             // size 1203 are data shreds: https://github.com/jito-foundation/jito-solana/blob/1742826fca975bd6d17daa5693abda861bbd2adf/ledger/src/shred/merkle.rs#L42
             // size 1228 are coding shreds: https://github.com/jito-foundation/jito-solana/blob/1742826fca975bd6d17daa5693abda861bbd2adf/ledger/src/shred/shred_code.rs#L16
-            let mut file = std::fs::File::create("udp_data.bin")?;
+            let mut file = std::fs::File::create("serialized_shreds.bin")?;
             file.write_all(&borsh::to_vec(&vec)?)?;
             return Ok(());
         }

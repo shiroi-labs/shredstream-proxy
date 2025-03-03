@@ -296,7 +296,10 @@ fn reconstruct_shreds(
                 slot_fec_index_to_iterate.insert((slot, fec_set_index));
             }
             Err(e) => {
-                warn!("Failed to reconstruct shred. Err: {e:?}");
+                if TraceShred::decode(data).is_ok() {
+                    continue;
+                }
+                warn!("Failed to decode shred. Err: {e:?}");
             }
         }
     }
@@ -322,7 +325,7 @@ fn reconstruct_shreds(
             // recover
             let merkle_shreds = shreds.iter().cloned().collect_vec();
             let Ok(recovered) = solana_ledger::shred::merkle::recover(merkle_shreds, &rs_cache)
-                .inspect_err(|e| warn!("Failed to recover shreds: {e}"))
+            // .inspect_err(|e| warn!("Failed to recover shreds: {e}"))
             else {
                 continue;
             };
@@ -349,17 +352,17 @@ fn reconstruct_shreds(
         let sorted_payloads = shreds
             .iter()
             .filter(|s| s.shred_type() == ShredType::Data)
-            .inspect(|shred| match &shred {
-                Shred::ShredCode(_) => {}
-                Shred::ShredData(s) => {
-                    if s.data_complete() {
-                        println!(
-                            "data_complete fec:{}, idx:{}",
-                            s.common_header.index, s.common_header.fec_set_index
-                        );
-                    }
-                }
-            })
+            // .inspect(|shred| match &shred {
+            //     Shred::ShredCode(_) => {}
+            //     Shred::ShredData(s) => {
+            //         if s.data_complete() {
+            //             println!(
+            //                 "data_complete. slot: {slot} fec:{}, idx:{}",
+            //                 s.common_header.index, s.common_header.fec_set_index
+            //             );
+            //         }
+            //     }
+            // })
             .sorted_by_key(|s| s.index())
             .map(|s| s.payload().as_ref())
             .collect_vec();
@@ -368,11 +371,9 @@ fn reconstruct_shreds(
             Ok(v) => v,
             Err(e) => {
                 println!(
-                    "start idx: {}, end idx: {}. end-start = {}",
+                    "start idx: {}, end idx: {}",
                     sorted_shreds.first().unwrap().index(),
                     sorted_shreds.last().as_ref().unwrap().index(),
-                    sorted_shreds.last().as_ref().unwrap().index()
-                        - sorted_shreds.first().unwrap().index(),
                 );
                 println!(
                     "slot {slot} failed to deshred fec_set_index {fec_set_index}. num_expected_shreds: {num_expected_shreds}, num_data_shreds: {num_data_shreds}. Err: {e}"
@@ -388,6 +389,10 @@ fn reconstruct_shreds(
                     continue;
                 }
             };
+        println!(
+            "!slot {slot} fec_index: {fec_set_index} entries count: {}",
+            entries.len()
+        );
         deshredded_entries.extend(entries);
         if let Some(fec_set) = all_reconstructed_shreds.get_mut(&slot) {
             fec_set.remove(&fec_set_index);
